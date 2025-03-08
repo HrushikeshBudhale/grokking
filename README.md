@@ -1,4 +1,4 @@
-# Grok
+# grokking
 Implementation of paper [Grokking: Generalization Beyond Overfitting on Small Algorithmic Datasets](https://arxiv.org/abs/2201.02177) for experimenting with Grokking phenomenon on small algorithmic dataset based on OpenAI/grok  
 
 <p align="center">
