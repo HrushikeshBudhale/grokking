@@ -17,15 +17,16 @@ class AttentionHead(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
     
     def forward(self, queries: Tensor, keys: Tensor, values: Tensor, mask: Tensor) -> Tensor:
+        ''' queries.shape == keys.shape == values.shape => (batch_size, context_len, d_model) ''' 
         q = self.q(queries)
         k = self.k(keys)
         v = self.v(values)
         # scaled dot product
-        attn = torch.matmul(q, k.transpose(-2, -1)) / self.d_key ** 0.5
+        attn = torch.matmul(q, k.transpose(-2, -1)) / self.d_key ** 0.5                         # (batch_size, context_len, context_len)
         if mask is not None:
             attn.masked_fill_(mask == 0, float('-inf'))
         attn = self.softmax(attn)
-        return torch.matmul(attn, v)
+        return torch.matmul(attn, v)                                                            # (batch_size, context_len, d_key)
     
     def __repr__(self) -> str:
         return f'AttentionHead(d_model={self.d_model}, d_key={self.d_key})'
@@ -40,9 +41,10 @@ class MultiHeadAttention(nn.Module):
         self.linear = nn.Linear(d_model, d_model, bias=False)
         
     def forward(self, queries: Tensor, keys: Tensor, values: Tensor, mask: Tensor) -> Tensor:
+        ''' queries.shape == keys.shape == values.shape => (batch_size, context_len, d_model) '''
         # parallel attention heads
-        x = torch.cat([head(queries, keys, values, mask) for head in self.heads], dim=-1)
-        return self.linear(x)
+        x = torch.cat([head(queries, keys, values, mask) for head in self.heads], dim=-1)       # (batch_size, context_len, d_key*n_heads = d_model)
+        return self.linear(x)                                                                   # (batch_size, context_len, d_model)
 
 class FFN(nn.Module):
     def __init__(self, d_model: int, non_linearity:str='relu') -> None:
@@ -53,6 +55,7 @@ class FFN(nn.Module):
         self.act = {'relu': F.relu, 'gelu': F.gelu}[non_linearity]
     
     def forward(self, x: Tensor) -> Tensor:
+        ''' x: (batch_size, context_len, d_model) '''
         return self.linear2(self.act(self.linear1(x)))
     
 class DecoderBlock(nn.Module):
@@ -65,11 +68,12 @@ class DecoderBlock(nn.Module):
         self.ffn_norm = nn.LayerNorm(d_model)
         
     def forward(self, x: Tensor, mask: Tensor) -> Tensor:
+        ''' x: (batch_size, context_len, d_model) '''
         a1 = self.self_attn(x, x, x, mask)
-        a1 = self.attn_norm(x+a1)
-        a2 = self.dropout(self.ffn(a1))
-        x = self.ffn_norm(a1+a2)
-        return x
+        a1 = self.attn_norm(x+a1)         
+        a2 = self.dropout(self.ffn(a1))   
+        x = self.ffn_norm(a1+a2)          
+        return x                                                                                # (batch_size, context_len, d_model)
         
     def __repr__(self) -> str:
         return f'DecoderBlock(d_model={self.d_model}, n_heads={self.n_heads})'
@@ -81,9 +85,10 @@ class Decoder(nn.Module):
         self.norm = nn.LayerNorm(d_model)
         
     def forward(self, x: Tensor, mask: Tensor) -> Tensor:
+        ''' x: (batch_size, context_len, d_model) '''
         for block in self.blocks:
             x = block(x, mask)
-        return self.norm(x)
+        return self.norm(x)                                                                     # (batch_size, context_len, d_model)
         
     def __repr__(self) -> str:
         return f'Decoder(d_model={self.d_model}, n_blocks={self.n_blocks}, n_heads={self.n_heads})'
@@ -119,31 +124,34 @@ class Transformer(nn.Module):
         pe = torch.zeros(context_len, d_model)
         for pos in range(context_len):
             for i in range(0, d_model, 2):
-                pe[pos, i] = np.sin(pos / (10000 ** (i / d_model)))
-                pe[pos, i + 1] = np.cos(pos / (10000 ** ((i + 1) / d_model)))
-        return pe.unsqueeze(0) # (1, context_len, d_model)
+                pe[pos, i]   = np.sin(pos / (10000 ** ( i    / d_model)))
+                pe[pos, i+1] = np.cos(pos / (10000 ** ((i+1) / d_model)))
+        return pe.unsqueeze(0)                                                                  # (1, context_len, d_model)
 
     @staticmethod
     def _mask(context_len: int) -> Tensor:
         return torch.ones([context_len, context_len]).tril()
         
     def embed(self, indices: Tensor) -> Tensor:
+        ''' inputs: (batch_size, context_len) '''
         context_len = indices.shape[-1]
-        pe = self.positional_encoding[:context_len, :]
-        return self.embedding(indices) + pe
+        pe = self.positional_encoding[:context_len, :]                                          # (1, context_len, d_model)
+        return self.embedding(indices) + pe                                                     # (batch_size, context_len, d_model)
     
     def forward(self, x: Tensor, pos: int = None) -> Tensor:
-        x = x.to(self.embedding.weight.device)       # (batch_size, context_len)
+        x = x.to(self.embedding.weight.device)                                                  # (batch_size, context_len)
         self_attn_mask = self.mask[:x.shape[-1], :x.shape[-1]]
         
         # Decode
-        x = self.embed(x)                           # (batch_size, context_len, d_model)
-        decoded = self.decoder(x, self_attn_mask)   # (batch_size, context_len, d_model)
+        x = self.embed(x)                                                                       # (batch_size, context_len, d_model)
+        decoded = self.decoder(x, self_attn_mask)                                               # (batch_size, context_len, d_model)
         
         # Return predictions for specific position
         if pos is not None:
-            decoded = decoded[:, pos, :]
-        y_hat = self.linear(decoded)                # (batch_size, context_len, vocab_size)
+            decoded = decoded[:, pos, :]                                                        # (batch_size, d_model)
+            y_hat = self.linear(decoded)                                                        # (batch_size, vocab_size)
+        else:
+            y_hat = self.linear(decoded)                                                        # (batch_size, context_len, vocab_size)
         return y_hat
     
     def __repr__(self) -> str:
