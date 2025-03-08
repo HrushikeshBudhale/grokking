@@ -1,10 +1,8 @@
-from typing import Tuple, List, Dict, Union
-
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor, tensor
+from torch import Tensor
 
 
 class AttentionHead(nn.Module):

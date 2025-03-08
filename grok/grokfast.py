@@ -1,8 +1,6 @@
-import torch
 from typing import Dict, Optional
 import torch.nn as nn
-import torch.nn.functional as F
-from torch import Tensor, tensor
+from torch import Tensor
 
 def gradfilter_ema(m: nn.Module,
                     grads: Optional[Dict[str, Tensor]] = None,
