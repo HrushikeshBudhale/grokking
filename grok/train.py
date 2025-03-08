@@ -11,7 +11,7 @@ def train(dataloader, optimizer, scheduler, loss_fn, model, device):
     model.train()
     grads = None
     for batch in dataloader:
-        inputs, labels = batch                                          # (batch_size, context_len), (batch_size)
+        inputs, labels = batch                                                              # (batch_size, context_len), (batch_size)
         optimizer.zero_grad()
         y_hat = model(inputs.to(device), pos=-1)                                            # (batch_size, vocab_size)
         loss = loss_fn(y_hat, labels.to(device))
@@ -115,13 +115,13 @@ def parse_arguments():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--num-steps", type=int, default=3e5)
-    parser.add_argument("--weight-decay", type=float, default=0)
-    parser.add_argument("--save-weights", action="store_true")
+    parser.add_argument("--weight-decay", type=float, default=0.005)
+    parser.add_argument("--save-weights", action="store_false")
     
     # GrokFast
     parser.add_argument("--use-filter", action="store_true")
-    parser.add_argument("--alpha", type=float, default=0.99)
-    parser.add_argument("--lamb", type=float, default=5.0)
+    parser.add_argument("--alpha", type=float, default=0.98)
+    parser.add_argument("--lamb", type=float, default=2.0)
     
     return parser.parse_args()
 
