@@ -1,5 +1,5 @@
 # grokking
-Implementation of paper [Grokking: Generalization Beyond Overfitting on Small Algorithmic Datasets](https://arxiv.org/abs/2201.02177) for experimenting with Grokking phenomenon on small algorithmic dataset based on OpenAI/grok  
+Reimplementation of paper [Grokking: Generalization Beyond Overfitting on Small Algorithmic Datasets](https://arxiv.org/abs/2201.02177) for experimenting with grokking phenomenon on small algorithmic dataset.  
 
 <p align="center">
   <img width="400" src="https://github.com/HrushikeshBudhale/grokking/blob/main/results/GrokFast_Accuracy_graph.png?raw=true" alt="Accuracy Graph">
