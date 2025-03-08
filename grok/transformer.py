@@ -16,7 +16,6 @@ class AttentionHead(nn.Module):
         self.q = nn.Linear(d_model, d_key, bias=False)
         self.k = nn.Linear(d_model, d_key, bias=False)
         self.v = nn.Linear(d_model, d_key, bias=False)
-        
         self.softmax = nn.Softmax(dim=-1)
     
     def forward(self, queries: Tensor, keys: Tensor, values: Tensor, mask: Tensor) -> Tensor:
@@ -58,7 +57,7 @@ class FFN(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         return self.linear2(self.act(self.linear1(x)))
     
-class Block(nn.Module):
+class DecoderBlock(nn.Module):
     def __init__(self, d_model: int, n_heads: int, dropout: float=0.0, non_linearity: str='relu') -> None:
         super().__init__()
         self.self_attn = MultiHeadAttention(d_model, n_heads)
@@ -75,12 +74,12 @@ class Block(nn.Module):
         return x
         
     def __repr__(self) -> str:
-        return f'Block(d_model={self.d_model}, n_heads={self.n_heads})'
+        return f'DecoderBlock(d_model={self.d_model}, n_heads={self.n_heads})'
     
 class Decoder(nn.Module):
     def __init__(self, d_model: int, n_blocks: int, n_heads: int, dropout: float=0.0, non_linearity: str='relu') -> None:
         super().__init__()
-        self.blocks = nn.ModuleList([Block(d_model, n_heads, dropout, non_linearity) for _ in range(n_blocks)])
+        self.blocks = nn.ModuleList([DecoderBlock(d_model, n_heads, dropout, non_linearity) for _ in range(n_blocks)])
         self.norm = nn.LayerNorm(d_model)
         
     def forward(self, x: Tensor, mask: Tensor) -> Tensor:
@@ -97,7 +96,7 @@ class Transformer(nn.Module):
                  d_model: int = 256,
                  n_blocks: int = 4,
                  n_heads: int = 4,
-                 dropout: float=0.1,
+                 dropout: float = 0.1,
                  max_context_len: int = 1024,
                  vocab_size: int = 2000,
                  non_linearity: str='relu') -> None:
@@ -111,8 +110,8 @@ class Transformer(nn.Module):
         self.non_linearity = non_linearity
         self.embedding = nn.Embedding(vocab_size, d_model)
         
-        self.register_buffer('positional_encoding', self._positional_encoding(max_context_len, d_model))
-        self.register_buffer('mask', self.mask(max_context_len))
+        self.register_buffer('positional_encoding', self._positional_encoding(max_context_len, d_model))    # (1, context_len, d_model)
+        self.register_buffer('mask', self._mask(max_context_len))                                           # (context_len, context_len)
         
         self.decoder = Decoder(d_model, n_blocks, n_heads, dropout, non_linearity)
         self.linear = nn.Linear(d_model, vocab_size, bias=False)
@@ -124,10 +123,10 @@ class Transformer(nn.Module):
             for i in range(0, d_model, 2):
                 pe[pos, i] = np.sin(pos / (10000 ** (i / d_model)))
                 pe[pos, i + 1] = np.cos(pos / (10000 ** ((i + 1) / d_model)))
-        return pe.unsqueeze(0)
+        return pe.unsqueeze(0) # (1, context_len, d_model)
 
     @staticmethod
-    def mask(context_len: int) -> Tensor:
+    def _mask(context_len: int) -> Tensor:
         return torch.ones([context_len, context_len]).tril()
         
     def embed(self, indices: Tensor) -> Tensor:
@@ -136,17 +135,17 @@ class Transformer(nn.Module):
         return self.embedding(indices) + pe
     
     def forward(self, x: Tensor, pos: int = None) -> Tensor:
-        x = x.to(self.embedding.weight.device)
+        x = x.to(self.embedding.weight.device)       # (batch_size, context_len)
         self_attn_mask = self.mask[:x.shape[-1], :x.shape[-1]]
         
         # Decode
-        x = self.embed(x)
-        decoded = self.decoder(decoded, self_attn_mask)
+        x = self.embed(x)                           # (batch_size, context_len, d_model)
+        decoded = self.decoder(x, self_attn_mask)   # (batch_size, context_len, d_model)
         
         # Return predictions for specific position
         if pos is not None:
             decoded = decoded[:, pos, :]
-        y_hat = self.linear(decoded)
+        y_hat = self.linear(decoded)                # (batch_size, context_len, vocab_size)
         return y_hat
     
     def __repr__(self) -> str:
